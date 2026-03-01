@@ -124,9 +124,11 @@ def send_email(markdown_content: str) -> None:
 
     html = HTML_TEMPLATE.format(subject=subject, content=html_body)
 
+    recipients = [r.strip() for r in recipient_email.split(",") if r.strip()]
+
     msg = MIMEMultipart("alternative")
     msg["From"] = gmail_address
-    msg["To"] = recipient_email
+    msg["To"] = ", ".join(recipients)
     msg["Subject"] = subject
 
     msg.attach(MIMEText(markdown_content, "plain", "utf-8"))
@@ -135,8 +137,8 @@ def send_email(markdown_content: str) -> None:
     try:
         with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
             server.login(gmail_address, gmail_app_password)
-            server.sendmail(gmail_address, recipient_email, msg.as_string())
-        logger.info("Email sent to %s", recipient_email)
+            server.sendmail(gmail_address, recipients, msg.as_string())
+        logger.info("Email sent to %s", ", ".join(recipients))
     except smtplib.SMTPException:
-        logger.exception("Failed to send email to %s", recipient_email)
+        logger.exception("Failed to send email to %s", ", ".join(recipients))
         raise
