@@ -1,0 +1,7 @@
+services:
+  daily-news-digest:
+    build: .
+    env_file: config.env
+    environment:
+      - TZ=Asia/Shanghai
+    restart: unless-stopped
