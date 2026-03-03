@@ -57,9 +57,11 @@ def _build_prompt(news: dict) -> str:
         ("cn_finance", "中文财经新闻原文"),
     ]
 
+    MAX_ARTICLES_PER_SECTION = 30
+
     sections = []
     for key, title in section_config:
-        articles = news.get(key, [])
+        articles = news.get(key, [])[:MAX_ARTICLES_PER_SECTION]
         if articles:
             sections.append(f"## {title}\n")
             for i, article in enumerate(articles, 1):
