@@ -27,4 +27,6 @@ jobs:
         with:
           context: .
           push: true
-          tags: jasonxi89/daily-news-digest:latest
+          tags: |
+            jasonxi89/daily-news-digest:latest
+            jasonxi89/daily-news-digest:${{ github.sha }}
