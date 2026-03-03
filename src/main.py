@@ -18,10 +18,10 @@ def main():
     # Step 1: Fetch news
     try:
         news = fetch_all_news()
-        intl_count = len(news.get("international", []))
-        tech_count = len(news.get("tech", []))
-        fin_count = len(news.get("finance", []))
-        logger.info(f"Fetched {intl_count} international + {tech_count} tech + {fin_count} finance articles")
+        counts = {k: len(v) for k, v in news.items()}
+        total = sum(counts.values())
+        detail = ", ".join(f"{v} {k}" for k, v in counts.items())
+        logger.info(f"Fetched {total} articles: {detail}")
     except Exception as e:
         logger.error(f"Failed to fetch news: {e}")
         sys.exit(1)

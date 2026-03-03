@@ -104,6 +104,64 @@ FINANCE_RSS_SOURCES = [
     },
 ]
 
+CN_NEWS_RSS_SOURCES = [
+    {
+        "name": "澎湃新闻",
+        "url": "https://feedx.net/rss/thepaper.xml",
+    },
+    {
+        "name": "界面新闻",
+        "url": "https://feedx.net/rss/jiemian.xml",
+    },
+    {
+        "name": "南方周末",
+        "url": "https://feedx.net/rss/infzm.xml",
+    },
+    {
+        "name": "中国日报",
+        "url": "https://www.chinadaily.com.cn/rss/china_rss.xml",
+    },
+]
+
+CN_TECH_RSS_SOURCES = [
+    {
+        "name": "36氪",
+        "url": "https://36kr.com/feed",
+    },
+    {
+        "name": "虎嗅",
+        "url": "https://feedx.net/rss/huxiu.xml",
+    },
+    {
+        "name": "少数派",
+        "url": "https://sspai.com/feed",
+    },
+    {
+        "name": "爱范儿",
+        "url": "https://www.ifanr.com/feed",
+    },
+    {
+        "name": "IT之家",
+        "url": "https://www.ithome.com/rss/",
+        "headers": True,
+    },
+]
+
+CN_FINANCE_RSS_SOURCES = [
+    {
+        "name": "Google中文财经",
+        "url": "https://news.google.com/rss/search?q=%E8%82%A1%E5%B8%82+OR+A%E8%82%A1+OR+%E7%BB%8F%E6%B5%8E+OR+%E5%A4%AE%E8%A1%8C&hl=zh-CN&gl=CN&ceid=CN:zh-Hans",
+    },
+    {
+        "name": "Google A股",
+        "url": "https://news.google.com/rss/search?q=A%E8%82%A1+OR+%E6%B2%AA%E6%8C%87+OR+%E6%B7%B1%E6%8C%87+OR+%E5%88%9B%E4%B8%9A%E6%9D%BF&hl=zh-CN&gl=CN&ceid=CN:zh-Hans",
+    },
+    {
+        "name": "经济观察报",
+        "url": "http://www.eeo.com.cn/rss.xml",
+    },
+]
+
 HACKER_NEWS_TOP_STORIES_URL = "https://hacker-news.firebaseio.com/v0/topstories.json"
 HACKER_NEWS_ITEM_URL = "https://hacker-news.firebaseio.com/v0/item/{id}.json"
 
@@ -128,8 +186,16 @@ def _fetch_rss(source: dict, cutoff: datetime) -> list[dict]:
     name = source["name"]
     url = source["url"]
     articles = []
+    headers = None
+    if source.get("headers"):
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            ),
+        }
     try:
-        resp = requests.get(url, timeout=FETCH_TIMEOUT)
+        resp = requests.get(url, timeout=FETCH_TIMEOUT, headers=headers)
         resp.raise_for_status()
         feed = feedparser.parse(resp.content)
 
@@ -229,64 +295,52 @@ def fetch_all_news() -> dict[str, list[dict]]:
         Each article: {"title", "summary", "link", "source", "published"}
     """
     cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
-    international_articles: list[dict] = []
-    tech_articles: list[dict] = []
 
-    finance_articles: list[dict] = []
+    categories: dict[str, list[dict]] = {
+        "international": [],
+        "tech": [],
+        "finance": [],
+        "cn_news": [],
+        "cn_tech": [],
+        "cn_finance": [],
+    }
 
-    with ThreadPoolExecutor(max_workers=16) as executor:
+    source_map = [
+        (INTERNATIONAL_RSS_SOURCES, "international"),
+        (TECH_RSS_SOURCES, "tech"),
+        (FINANCE_RSS_SOURCES, "finance"),
+        (CN_NEWS_RSS_SOURCES, "cn_news"),
+        (CN_TECH_RSS_SOURCES, "cn_tech"),
+        (CN_FINANCE_RSS_SOURCES, "cn_finance"),
+    ]
+
+    with ThreadPoolExecutor(max_workers=24) as executor:
         futures = {}
 
-        # Submit international RSS feeds
-        for source in INTERNATIONAL_RSS_SOURCES:
-            future = executor.submit(_fetch_rss, source, cutoff)
-            futures[future] = ("international", source["name"])
-
-        # Submit tech RSS feeds
-        for source in TECH_RSS_SOURCES:
-            future = executor.submit(_fetch_rss, source, cutoff)
-            futures[future] = ("tech", source["name"])
-
-        # Submit finance RSS feeds
-        for source in FINANCE_RSS_SOURCES:
-            future = executor.submit(_fetch_rss, source, cutoff)
-            futures[future] = ("finance", source["name"])
+        for sources, category in source_map:
+            for source in sources:
+                future = executor.submit(_fetch_rss, source, cutoff)
+                futures[future] = (category, source["name"])
 
         # Submit Hacker News
         hn_future = executor.submit(_fetch_hacker_news, cutoff)
         futures[hn_future] = ("tech", "Hacker News")
 
-        # Collect results
         for future in as_completed(futures):
             category, source_name = futures[future]
             try:
                 articles = future.result()
-                if category == "international":
-                    international_articles.extend(articles)
-                elif category == "finance":
-                    finance_articles.extend(articles)
-                else:
-                    tech_articles.extend(articles)
+                categories[category].extend(articles)
             except Exception as exc:
                 logger.warning("Unexpected error fetching %s: %s", source_name, exc)
 
-    # Sort by published date, newest first
-    international_articles.sort(key=lambda a: a["published"], reverse=True)
-    tech_articles.sort(key=lambda a: a["published"], reverse=True)
-    finance_articles.sort(key=lambda a: a["published"], reverse=True)
+    for cat_articles in categories.values():
+        cat_articles.sort(key=lambda a: a["published"], reverse=True)
 
-    logger.info(
-        "Total: %d international, %d tech, %d finance articles",
-        len(international_articles),
-        len(tech_articles),
-        len(finance_articles),
-    )
+    counts = ", ".join(f"{len(v)} {k}" for k, v in categories.items())
+    logger.info("Total: %s", counts)
 
-    return {
-        "international": international_articles,
-        "tech": tech_articles,
-        "finance": finance_articles,
-    }
+    return categories
 
 
 if __name__ == "__main__":

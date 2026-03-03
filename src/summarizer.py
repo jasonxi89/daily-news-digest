@@ -18,15 +18,12 @@ def summarize_news(news: dict) -> str:
     Returns:
         Markdown string with ranked, translated news summaries.
     """
-    international = news.get("international", [])
-    tech = news.get("tech", [])
-    finance = news.get("finance", [])
-
-    if not international and not tech and not finance:
+    all_empty = all(len(news.get(k, [])) == 0 for k in news)
+    if all_empty:
         today = datetime.now().strftime("%Y-%m-%d")
         return f"# {today} 每日新闻摘要\n\n今日暂无新闻更新。"
 
-    prompt = _build_prompt(international, tech, finance)
+    prompt = _build_prompt(news)
 
     try:
         client = anthropic.Anthropic()
@@ -47,30 +44,31 @@ def summarize_news(news: dict) -> str:
         return _error_fallback(f"AI 服务返回错误 (HTTP {e.status_code})。")
 
 
-def _build_prompt(international: list, tech: list, finance: list) -> str:
+def _build_prompt(news: dict) -> str:
     """Build the summarization prompt with all articles."""
     today = datetime.now().strftime("%Y-%m-%d")
 
+    section_config = [
+        ("international", "英文国际新闻原文"),
+        ("tech", "英文科技新闻原文"),
+        ("finance", "英文金融财经新闻原文"),
+        ("cn_news", "中文国内新闻原文"),
+        ("cn_tech", "中文科技新闻原文"),
+        ("cn_finance", "中文财经新闻原文"),
+    ]
+
     sections = []
-
-    if international:
-        sections.append("## 国际新闻原文\n")
-        for i, article in enumerate(international, 1):
-            sections.append(_format_article(i, article))
-
-    if tech:
-        sections.append("## 科技新闻原文\n")
-        for i, article in enumerate(tech, 1):
-            sections.append(_format_article(i, article))
-
-    if finance:
-        sections.append("## 金融财经新闻原文\n")
-        for i, article in enumerate(finance, 1):
-            sections.append(_format_article(i, article))
+    for key, title in section_config:
+        articles = news.get(key, [])
+        if articles:
+            sections.append(f"## {title}\n")
+            for i, article in enumerate(articles, 1):
+                sections.append(_format_article(i, article))
 
     articles_text = "\n".join(sections)
 
-    return f"""你是一位专业的新闻编辑。请将以下英文新闻整理为中文每日摘要。
+    return f"""你是一位专业的新闻编辑。请将以下新闻整理为中文每日摘要。
+新闻来源包含英文和中文，英文新闻需翻译为中文，中文新闻直接整理。
 
 日期：{today}
 
@@ -81,7 +79,7 @@ def _build_prompt(international: list, tech: list, finance: list) -> str:
 # {today} 每日新闻摘要
 
 ## 🌍 国际大事
-（按重要性排序，精选 10 条最重要的新闻）
+（综合英文国际新闻源，按重要性排序，精选 10 条最重要的新闻）
 
 格式：
 ### 1. 中文标题
@@ -89,10 +87,13 @@ def _build_prompt(international: list, tech: list, finance: list) -> str:
 [阅读原文](链接) — 来源
 
 ## 💻 科技新闻
-（同上格式，精选 10 条）
+（综合英文和中文科技新闻源，按重要性排序，精选 10 条）
 
 ## 💰 金融财经
-（同上格式，精选 10 条，涵盖股市、货币、大宗商品、宏观经济等）
+（综合英文和中文财经新闻源，精选 10 条，涵盖股市、货币、大宗商品、宏观经济等）
+
+## 🇨🇳 国内热点
+（来自中文国内新闻源，精选 10 条最重要的国内新闻）
 
 ## 📊 今日趋势
 （总结今天新闻中的 3-5 个主要趋势或热点话题，每个1-2句话）
@@ -101,10 +102,11 @@ def _build_prompt(international: list, tech: list, finance: list) -> str:
 1. 按重要性和影响力对每个分类内的新闻排序
 2. 每个板块精选 10 条最重要的新闻
 3. **如果多条新闻报道的是同一事件或内容高度相似，合并为一条**，综合多个来源的信息，附上最佳的一个原文链接
-4. 翻译要自然流畅，不要机翻感
-5. 摘要要抓住核心要点，不要遗漏关键信息
-6. 如果某个分类没有新闻，省略该分类
-7. 直接输出 Markdown，不要加任何前缀说明"""
+4. 科技和财经板块应**融合中英文源**，选出全球最重要的 10 条，不要分开列
+5. 英文新闻翻译要自然流畅，不要机翻感；中文新闻直接整理摘要
+6. 摘要要抓住核心要点，不要遗漏关键信息
+7. 如果某个分类没有新闻，省略该分类
+8. 直接输出 Markdown，不要加任何前缀说明"""
 
 
 def _format_article(index: int, article: dict) -> str:
