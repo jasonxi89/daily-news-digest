@@ -33,8 +33,16 @@ INTERNATIONAL_RSS_SOURCES = [
         "url": "https://news.google.com/rss/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRGx1YlY4U0FtVnVHZ0pWVXlnQVAB",
     },
     {
-        "name": "NHK World",
-        "url": "https://www3.nhk.or.jp/nhkworld/en/news/feeds/",
+        "name": "The Guardian World",
+        "url": "https://www.theguardian.com/world/rss",
+    },
+    {
+        "name": "NPR News",
+        "url": "https://feeds.npr.org/1001/rss.xml",
+    },
+    {
+        "name": "Google News World",
+        "url": "https://news.google.com/rss/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRGx1YlY4U0FtVnVHZ0pWVXlnQVAB?hl=en-US&gl=US&ceid=US:en",
     },
 ]
 
@@ -44,16 +52,55 @@ TECH_RSS_SOURCES = [
         "url": "https://techcrunch.com/feed/",
     },
     {
-        "name": "The Verge",
-        "url": "https://www.theverge.com/rss/index.xml",
-    },
-    {
         "name": "Ars Technica",
         "url": "https://feeds.arstechnica.com/arstechnica/index",
     },
     {
         "name": "Google News Tech",
         "url": "https://news.google.com/rss/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRGRqTVhZU0FtVnVHZ0pWVXlnQVAB",
+    },
+    {
+        "name": "Wired",
+        "url": "https://www.wired.com/feed/rss",
+    },
+    {
+        "name": "MIT Technology Review",
+        "url": "https://www.technologyreview.com/feed/",
+    },
+    {
+        "name": "The Register",
+        "url": "https://www.theregister.com/headlines.atom",
+    },
+    {
+        "name": "Engadget",
+        "url": "https://www.engadget.com/rss.xml",
+    },
+]
+
+FINANCE_RSS_SOURCES = [
+    {
+        "name": "MarketWatch Top Stories",
+        "url": "https://feeds.marketwatch.com/marketwatch/topstories/",
+    },
+    {
+        "name": "Financial Times",
+        "url": "https://www.ft.com/rss/home",
+    },
+    {
+        "name": "Bloomberg via Google News",
+        "url": "https://news.google.com/rss/search?q=site:bloomberg.com+finance+OR+markets+OR+economy&hl=en-US&gl=US&ceid=US:en",
+    },
+    {
+        "name": "Google News Finance",
+        "url": "https://news.google.com/rss/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRGx6TVdZU0FtVnVHZ0pWVXlnQVAB",
+    },
+    {
+        "name": "Investing.com News",
+        "url": "https://www.investing.com/rss/news.rss",
+    },
+    {
+        "name": "Google News Economy",
+        "url": "https://news.google.com/rss/search?q=economy+OR+stock+market+OR+federal+reserve+OR+inflation&hl=en-US&gl=US&ceid=US:en",
     },
 ]
 
@@ -185,7 +232,9 @@ def fetch_all_news() -> dict[str, list[dict]]:
     international_articles: list[dict] = []
     tech_articles: list[dict] = []
 
-    with ThreadPoolExecutor(max_workers=12) as executor:
+    finance_articles: list[dict] = []
+
+    with ThreadPoolExecutor(max_workers=16) as executor:
         futures = {}
 
         # Submit international RSS feeds
@@ -198,6 +247,11 @@ def fetch_all_news() -> dict[str, list[dict]]:
             future = executor.submit(_fetch_rss, source, cutoff)
             futures[future] = ("tech", source["name"])
 
+        # Submit finance RSS feeds
+        for source in FINANCE_RSS_SOURCES:
+            future = executor.submit(_fetch_rss, source, cutoff)
+            futures[future] = ("finance", source["name"])
+
         # Submit Hacker News
         hn_future = executor.submit(_fetch_hacker_news, cutoff)
         futures[hn_future] = ("tech", "Hacker News")
@@ -209,6 +263,8 @@ def fetch_all_news() -> dict[str, list[dict]]:
                 articles = future.result()
                 if category == "international":
                     international_articles.extend(articles)
+                elif category == "finance":
+                    finance_articles.extend(articles)
                 else:
                     tech_articles.extend(articles)
             except Exception as exc:
@@ -217,16 +273,19 @@ def fetch_all_news() -> dict[str, list[dict]]:
     # Sort by published date, newest first
     international_articles.sort(key=lambda a: a["published"], reverse=True)
     tech_articles.sort(key=lambda a: a["published"], reverse=True)
+    finance_articles.sort(key=lambda a: a["published"], reverse=True)
 
     logger.info(
-        "Total: %d international, %d tech articles",
+        "Total: %d international, %d tech, %d finance articles",
         len(international_articles),
         len(tech_articles),
+        len(finance_articles),
     )
 
     return {
         "international": international_articles,
         "tech": tech_articles,
+        "finance": finance_articles,
     }
 
 

@@ -20,12 +20,13 @@ def summarize_news(news: dict) -> str:
     """
     international = news.get("international", [])
     tech = news.get("tech", [])
+    finance = news.get("finance", [])
 
-    if not international and not tech:
+    if not international and not tech and not finance:
         today = datetime.now().strftime("%Y-%m-%d")
         return f"# {today} 每日新闻摘要\n\n今日暂无新闻更新。"
 
-    prompt = _build_prompt(international, tech)
+    prompt = _build_prompt(international, tech, finance)
 
     try:
         client = anthropic.Anthropic()
@@ -46,7 +47,7 @@ def summarize_news(news: dict) -> str:
         return _error_fallback(f"AI 服务返回错误 (HTTP {e.status_code})。")
 
 
-def _build_prompt(international: list, tech: list) -> str:
+def _build_prompt(international: list, tech: list, finance: list) -> str:
     """Build the summarization prompt with all articles."""
     today = datetime.now().strftime("%Y-%m-%d")
 
@@ -62,6 +63,11 @@ def _build_prompt(international: list, tech: list) -> str:
         for i, article in enumerate(tech, 1):
             sections.append(_format_article(i, article))
 
+    if finance:
+        sections.append("## 金融财经新闻原文\n")
+        for i, article in enumerate(finance, 1):
+            sections.append(_format_article(i, article))
+
     articles_text = "\n".join(sections)
 
     return f"""你是一位专业的新闻编辑。请将以下英文新闻整理为中文每日摘要。
@@ -75,7 +81,7 @@ def _build_prompt(international: list, tech: list) -> str:
 # {today} 每日新闻摘要
 
 ## 🌍 国际大事
-（按重要性排序，每条包含：中文标题、2-3句中文摘要、原文链接）
+（按重要性排序，精选 10 条最重要的新闻）
 
 格式：
 ### 1. 中文标题
@@ -83,17 +89,22 @@ def _build_prompt(international: list, tech: list) -> str:
 [阅读原文](链接) — 来源
 
 ## 💻 科技新闻
-（同上格式）
+（同上格式，精选 10 条）
+
+## 💰 金融财经
+（同上格式，精选 10 条，涵盖股市、货币、大宗商品、宏观经济等）
 
 ## 📊 今日趋势
-（总结今天新闻中的2-3个主要趋势或热点话题，每个1-2句话）
+（总结今天新闻中的 3-5 个主要趋势或热点话题，每个1-2句话）
 
 要求：
 1. 按重要性和影响力对每个分类内的新闻排序
-2. 翻译要自然流畅，不要机翻感
-3. 摘要要抓住核心要点，不要遗漏关键信息
-4. 如果某个分类没有新闻，省略该分类
-5. 直接输出 Markdown，不要加任何前缀说明"""
+2. 每个板块精选 10 条最重要的新闻
+3. **如果多条新闻报道的是同一事件或内容高度相似，合并为一条**，综合多个来源的信息，附上最佳的一个原文链接
+4. 翻译要自然流畅，不要机翻感
+5. 摘要要抓住核心要点，不要遗漏关键信息
+6. 如果某个分类没有新闻，省略该分类
+7. 直接输出 Markdown，不要加任何前缀说明"""
 
 
 def _format_article(index: int, article: dict) -> str:

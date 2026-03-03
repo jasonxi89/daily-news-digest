@@ -20,7 +20,8 @@ def main():
         news = fetch_all_news()
         intl_count = len(news.get("international", []))
         tech_count = len(news.get("tech", []))
-        logger.info(f"Fetched {intl_count} international + {tech_count} tech articles")
+        fin_count = len(news.get("finance", []))
+        logger.info(f"Fetched {intl_count} international + {tech_count} tech + {fin_count} finance articles")
     except Exception as e:
         logger.error(f"Failed to fetch news: {e}")
         sys.exit(1)
