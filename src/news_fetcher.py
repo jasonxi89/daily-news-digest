@@ -162,6 +162,17 @@ CN_FINANCE_RSS_SOURCES = [
     },
 ]
 
+CN_HEALTH_RSS_SOURCES = [
+    {
+        "name": "Google女性健康",
+        "url": "https://news.google.com/rss/search?q=%E5%A5%B3%E6%80%A7%E5%81%A5%E5%BA%B7+OR+%E5%A6%87%E7%A7%91+OR+%E5%A4%87%E5%AD%95+OR+%E4%B9%B3%E8%85%BA+OR+HPV+OR+%E5%AD%90%E5%AE%AB+OR+%E5%8D%B5%E5%B7%A2+OR+%E6%9B%B4%E5%B9%B4%E6%9C%9F+OR+%E7%97%9B%E7%BB%8F&hl=zh-CN&gl=CN&ceid=CN:zh-Hans",
+    },
+    {
+        "name": "Google医疗热点",
+        "url": "https://news.google.com/rss/search?q=%E5%8C%BB%E7%96%97+OR+%E7%99%8C%E7%97%87+OR+%E7%96%AB%E8%8B%97+OR+%E5%8C%BB%E4%BF%9D+OR+%E4%BD%93%E6%A3%80+OR+%E7%96%BE%E7%97%85+OR+%E6%89%8B%E6%9C%AF+OR+%E8%8D%AF%E5%93%81&hl=zh-CN&gl=CN&ceid=CN:zh-Hans",
+    },
+]
+
 HACKER_NEWS_TOP_STORIES_URL = "https://hacker-news.firebaseio.com/v0/topstories.json"
 HACKER_NEWS_ITEM_URL = "https://hacker-news.firebaseio.com/v0/item/{id}.json"
 
@@ -375,6 +386,7 @@ def fetch_all_news() -> dict[str, list[dict]]:
         "cn_news": [],
         "cn_tech": [],
         "cn_finance": [],
+        "cn_health": [],
     }
 
     source_map = [
@@ -384,6 +396,7 @@ def fetch_all_news() -> dict[str, list[dict]]:
         (CN_NEWS_RSS_SOURCES, "cn_news"),
         (CN_TECH_RSS_SOURCES, "cn_tech"),
         (CN_FINANCE_RSS_SOURCES, "cn_finance"),
+        (CN_HEALTH_RSS_SOURCES, "cn_health"),
     ]
 
     with ThreadPoolExecutor(max_workers=24) as executor:
