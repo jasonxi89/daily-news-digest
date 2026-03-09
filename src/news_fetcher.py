@@ -168,6 +168,44 @@ HACKER_NEWS_ITEM_URL = "https://hacker-news.firebaseio.com/v0/item/{id}.json"
 FETCH_TIMEOUT = 10  # seconds per source
 HN_TOP_N = 30  # number of HN stories to fetch
 
+# --- DailyHotApi 医疗健康热搜 ---
+
+import os
+import re
+
+DAILYHOT_API_URL = os.getenv("DAILYHOT_API_URL", "http://localhost:6688")
+
+HEALTH_PLATFORMS = {
+    "weibo": "微博",
+    "douyin": "抖音",
+    "bilibili": "B站",
+    "baidu": "百度",
+    "zhihu": "知乎",
+    "thepaper": "澎湃",
+}
+
+# 女性健康 + 医疗热点关键词
+HEALTH_KEYWORDS = [
+    # 女性健康
+    "妇科", "月经", "痛经", "姨妈", "备孕", "怀孕", "孕期", "孕妇", "产后", "产检",
+    "哺乳", "母乳", "乳腺", "乳房", "子宫", "卵巢", "宫颈", "HPV", "避孕",
+    "更年期", "内分泌", "多囊", "试管婴儿", "不孕", "宫外孕", "顺产", "剖腹产",
+    "叶酸", "雌激素", "黄体酮", "白带", "盆底肌", "产后抑郁", "围绝经",
+    # 医疗热点
+    "医院", "医生", "护士", "手术", "癌症", "肿瘤", "化疗", "放疗",
+    "疫苗", "药品", "药物", "确诊", "体检", "核酸", "疾病", "治疗",
+    "心脏病", "高血压", "糖尿病", "抑郁症", "焦虑症", "失眠",
+    "甲状腺", "肺炎", "流感", "新冠", "艾滋", "乙肝",
+    "整形", "医美", "近视", "眼科", "牙科", "口腔",
+    "过敏", "免疫", "中医", "针灸", "骨科", "骨折",
+    "急救", "猝死", "心梗", "脑梗", "中风",
+    "医保", "医疗", "卫健委", "药监局", "集采", "带量采购",
+    "罕见病", "基因", "干细胞", "器官移植",
+]
+
+# 编译为正则，一次匹配所有关键词
+_HEALTH_PATTERN = re.compile("|".join(re.escape(kw) for kw in HEALTH_KEYWORDS))
+
 
 def _parse_published_date(entry: Any) -> datetime | None:
     """Extract a timezone-aware UTC datetime from a feedparser entry."""
@@ -286,6 +324,40 @@ def _fetch_hacker_news(cutoff: datetime) -> list[dict]:
     return articles
 
 
+def _fetch_health_hot() -> dict[str, list[dict]]:
+    """从 DailyHotApi 拉取各平台热榜，过滤出医疗健康相关话题。"""
+    result: dict[str, list[dict]] = {}
+
+    for endpoint, platform_name in HEALTH_PLATFORMS.items():
+        items = []
+        try:
+            url = f"{DAILYHOT_API_URL}/{endpoint}"
+            resp = requests.get(url, timeout=FETCH_TIMEOUT)
+            resp.raise_for_status()
+            data = resp.json()
+
+            for entry in data.get("data", []):
+                title = entry.get("title", "")
+                if not title or not _HEALTH_PATTERN.search(title):
+                    continue
+                hot = entry.get("hot", 0)
+                link = entry.get("url", "") or entry.get("mobileUrl", "")
+                items.append({
+                    "title": title,
+                    "hot": hot,
+                    "link": link,
+                    "platform": platform_name,
+                })
+            logger.info("Health hot: %d items from %s", len(items), platform_name)
+        except Exception as exc:
+            logger.warning("Failed to fetch health hot from %s: %s", platform_name, exc)
+
+        if items:
+            result[platform_name] = items
+
+    return result
+
+
 def fetch_all_news() -> dict[str, list[dict]]:
     """
     Fetch news from all sources in parallel, filter to last 24 hours.
@@ -336,6 +408,11 @@ def fetch_all_news() -> dict[str, list[dict]]:
 
     for cat_articles in categories.values():
         cat_articles.sort(key=lambda a: a["published"], reverse=True)
+
+    # Fetch health hot topics from DailyHotApi
+    health_hot = _fetch_health_hot()
+    if health_hot:
+        categories["health_hot"] = health_hot
 
     counts = ", ".join(f"{len(v)} {k}" for k, v in categories.items())
     logger.info("Total: %s", counts)

@@ -67,6 +67,18 @@ def _build_prompt(news: dict) -> str:
             for i, article in enumerate(articles, 1):
                 sections.append(_format_article(i, article))
 
+    # Health hot topics from DailyHotApi (different format: dict of platform -> items)
+    health_hot = news.get("health_hot", {})
+    if health_hot and isinstance(health_hot, dict):
+        sections.append("## 各平台医疗健康热搜原始数据\n")
+        for platform, items in health_hot.items():
+            sections.append(f"### {platform}\n")
+            for i, item in enumerate(items, 1):
+                title = item.get("title", "")
+                hot = item.get("hot", "")
+                link = item.get("link", "")
+                sections.append(f"{i}. **{title}** (热度: {hot})\n   Link: {link}\n")
+
     articles_text = "\n".join(sections)
 
     return f"""你是一位专业的新闻编辑。请将以下新闻整理为中文每日摘要。
@@ -96,6 +108,12 @@ def _build_prompt(news: dict) -> str:
 
 ## 🇨🇳 国内热点
 （来自中文国内新闻源，精选 10 条最重要的国内新闻）
+
+## 🏥 医疗健康热搜
+（从各平台医疗健康热搜中整理，按平台分组。每个平台列出有多少条就写多少条，不要编造。
+格式：先写平台名，再列条目。每条包含标题和一句话点评/背景补充。
+重点关注：女性健康、医疗政策、疾病防治、医学突破等。
+如果某平台没有医疗相关热搜，省略该平台。）
 
 ## 📊 今日趋势
 （总结今天新闻中的 3-5 个主要趋势或热点话题，每个1-2句话）
