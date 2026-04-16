@@ -28,7 +28,7 @@ def summarize_news(news: dict) -> str:
     try:
         client = anthropic.Anthropic()
         message = client.messages.create(
-            model="claude-sonnet-4-6",
+            model="claude-opus-4-7",
             max_tokens=16384,
             messages=[{"role": "user", "content": prompt}],
         )
