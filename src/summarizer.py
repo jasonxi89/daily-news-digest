@@ -36,7 +36,7 @@ def summarize_news(news: dict) -> str:
             max_tokens=16384,
             messages=[{"role": "user", "content": prompt}],
         )
-        return message.content[0].text
+        return next((b.text for b in message.content if getattr(b, "type", None) == "text"), "")
     except anthropic.APIConnectionError as e:
         logger.error("Failed to connect to Anthropic API: %s", e)
         return _error_fallback("无法连接到 AI 服务，请检查网络连接。")
