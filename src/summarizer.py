@@ -26,9 +26,13 @@ def summarize_news(news: dict) -> str:
     prompt = _build_prompt(news)
 
     try:
-        client = anthropic.Anthropic()
+        import os
+        client = anthropic.Anthropic(
+            api_key=os.environ.get("DEEPSEEK_API_KEY", ""),
+            base_url=os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com/anthropic"),
+        )
         message = client.messages.create(
-            model="claude-opus-4-7",
+            model=os.environ.get("DEEPSEEK_MODEL", "deepseek-v4-pro"),
             max_tokens=16384,
             messages=[{"role": "user", "content": prompt}],
         )
