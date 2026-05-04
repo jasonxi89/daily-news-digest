@@ -33,8 +33,14 @@ def summarize_news(news: dict) -> str:
         )
         message = client.messages.create(
             model=os.environ.get("DEEPSEEK_MODEL", "deepseek-v4-pro"),
-            max_tokens=16384,
+            max_tokens=32768,
             messages=[{"role": "user", "content": prompt}],
+        )
+        logger.info(
+            "summarize stop_reason=%s, input_tokens=%s, output_tokens=%s",
+            getattr(message, "stop_reason", None),
+            getattr(getattr(message, "usage", None), "input_tokens", None),
+            getattr(getattr(message, "usage", None), "output_tokens", None),
         )
         return next((b.text for b in message.content if getattr(b, "type", None) == "text"), "")
     except anthropic.APIConnectionError as e:
