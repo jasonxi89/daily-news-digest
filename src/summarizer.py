@@ -31,11 +31,12 @@ def summarize_news(news: dict) -> str:
             api_key=os.environ.get("DEEPSEEK_API_KEY", ""),
             base_url=os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com/anthropic"),
         )
-        message = client.messages.create(
+        with client.messages.stream(
             model=os.environ.get("DEEPSEEK_MODEL", "deepseek-v4-pro"),
             max_tokens=32768,
             messages=[{"role": "user", "content": prompt}],
-        )
+        ) as stream:
+            message = stream.get_final_message()
         logger.info(
             "summarize stop_reason=%s, input_tokens=%s, output_tokens=%s",
             getattr(message, "stop_reason", None),
