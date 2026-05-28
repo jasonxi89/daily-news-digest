@@ -28,11 +28,10 @@ def summarize_news(news: dict) -> str:
     try:
         import os
         client = anthropic.Anthropic(
-            api_key=os.environ.get("DEEPSEEK_API_KEY", ""),
-            base_url=os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com/anthropic"),
+            api_key=os.environ.get("ANTHROPIC_API_KEY", ""),
         )
         with client.messages.stream(
-            model=os.environ.get("DEEPSEEK_MODEL", "deepseek-v4-pro"),
+            model=os.environ.get("ANTHROPIC_MODEL", "claude-opus-4-7"),
             max_tokens=32768,
             messages=[{"role": "user", "content": prompt}],
         ) as stream:
