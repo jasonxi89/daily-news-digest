@@ -1,9 +1,10 @@
-"""News summarizer module using Claude API for Chinese translation and ranking."""
+"""News summarizer module using OpenRouter API for Chinese translation and ranking."""
 
 import logging
+import os
 from datetime import datetime
 
-import anthropic
+import openai
 
 logger = logging.getLogger(__name__)
 
@@ -26,31 +27,33 @@ def summarize_news(news: dict) -> str:
     prompt = _build_prompt(news)
 
     try:
-        import os
-        client = anthropic.Anthropic(
-            api_key=os.environ.get("ANTHROPIC_API_KEY", ""),
+        client = openai.OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=os.environ.get("OPENROUTER_API_KEY", ""),
+            timeout=600,
         )
-        with client.messages.stream(
-            model=os.environ.get("ANTHROPIC_MODEL", "claude-opus-4-7"),
+        response = client.chat.completions.create(
+            model=os.environ.get("OPENROUTER_MODEL", "deepseek/deepseek-v4-pro"),
             max_tokens=32768,
             messages=[{"role": "user", "content": prompt}],
-        ) as stream:
-            message = stream.get_final_message()
-        logger.info(
-            "summarize stop_reason=%s, input_tokens=%s, output_tokens=%s",
-            getattr(message, "stop_reason", None),
-            getattr(getattr(message, "usage", None), "input_tokens", None),
-            getattr(getattr(message, "usage", None), "output_tokens", None),
+            stream=True,
         )
-        return next((b.text for b in message.content if getattr(b, "type", None) == "text"), "")
-    except anthropic.APIConnectionError as e:
-        logger.error("Failed to connect to Anthropic API: %s", e)
+        parts = []
+        for chunk in response:
+            delta = chunk.choices[0].delta.content if chunk.choices else None
+            if delta:
+                parts.append(delta)
+        result = "".join(parts)
+        logger.info("summarize completed, total_chars=%s", len(result))
+        return result
+    except openai.APIConnectionError as e:
+        logger.error("Failed to connect to OpenRouter API: %s", e)
         return _error_fallback("无法连接到 AI 服务，请检查网络连接。")
-    except anthropic.AuthenticationError as e:
-        logger.error("Anthropic API authentication failed: %s", e)
+    except openai.AuthenticationError as e:
+        logger.error("OpenRouter API authentication failed: %s", e)
         return _error_fallback("AI 服务认证失败，请检查 API Key。")
-    except anthropic.APIStatusError as e:
-        logger.error("Anthropic API error (status %s): %s", e.status_code, e)
+    except openai.APIStatusError as e:
+        logger.error("OpenRouter API error (status %s): %s", e.status_code, e)
         return _error_fallback(f"AI 服务返回错误 (HTTP {e.status_code})。")
 
 
