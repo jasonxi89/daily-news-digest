@@ -3,6 +3,7 @@
 import logging
 import os
 import smtplib
+import time
 from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -10,6 +11,9 @@ from email.mime.text import MIMEText
 import markdown
 
 logger = logging.getLogger(__name__)
+
+# 每次失败后的等待秒数（指数退避）；总尝试次数 = len(RETRY_DELAYS)
+RETRY_DELAYS = (5, 30, 120)
 
 HTML_TEMPLATE = """\
 <!DOCTYPE html>
@@ -98,7 +102,8 @@ def send_email(markdown_content: str) -> None:
 
     Raises:
         ValueError: If required environment variables are missing.
-        smtplib.SMTPException: If the email fails to send.
+        smtplib.SMTPException | OSError: If all send attempts fail
+            (retries with exponential backoff, see RETRY_DELAYS).
     """
     gmail_address = os.environ.get("GMAIL_ADDRESS")
     gmail_app_password = os.environ.get("GMAIL_APP_PASSWORD")
@@ -134,11 +139,34 @@ def send_email(markdown_content: str) -> None:
     msg.attach(MIMEText(markdown_content, "plain", "utf-8"))
     msg.attach(MIMEText(html, "html", "utf-8"))
 
-    try:
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-            server.login(gmail_address, gmail_app_password)
-            server.sendmail(gmail_address, recipients, msg.as_string())
-        logger.info("Email sent to %s", ", ".join(recipients))
-    except smtplib.SMTPException:
-        logger.exception("Failed to send email to %s", ", ".join(recipients))
-        raise
+    _send_with_retry(gmail_address, gmail_app_password, recipients, msg)
+
+
+def _send_with_retry(sender: str, password: str, recipients: list, message) -> None:
+    """Send via Gmail SMTP with retries (exponential backoff).
+
+    Attempts len(RETRY_DELAYS) times; waits RETRY_DELAYS[i] seconds after
+    the i-th failure. Raises the last error only when all attempts fail.
+    """
+    total_attempts = len(RETRY_DELAYS)
+    last_error = None
+
+    for attempt in range(1, total_attempts + 1):
+        try:
+            with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+                server.login(sender, password)
+                server.sendmail(sender, recipients, message.as_string())
+            logger.info("Email sent to %s (attempt %d)", ", ".join(recipients), attempt)
+            return
+        except (smtplib.SMTPException, OSError) as exc:
+            last_error = exc
+            logger.warning(
+                "Email send attempt %d/%d to %s failed: %s: %s",
+                attempt, total_attempts, ", ".join(recipients),
+                type(exc).__name__, exc,
+            )
+            if attempt < total_attempts:
+                time.sleep(RETRY_DELAYS[attempt - 1])
+
+    logger.error("All %d email send attempts failed", total_attempts)
+    raise last_error
