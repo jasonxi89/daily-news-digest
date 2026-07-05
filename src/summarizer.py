@@ -31,6 +31,7 @@ def summarize_news(news: dict) -> str:
             base_url="https://openrouter.ai/api/v1",
             api_key=os.environ.get("OPENROUTER_API_KEY", ""),
             timeout=600,
+            max_retries=2,
         )
         response = client.chat.completions.create(
             model=os.environ.get("OPENROUTER_MODEL", "deepseek/deepseek-v4-pro"),
@@ -55,6 +56,10 @@ def summarize_news(news: dict) -> str:
     except openai.APIStatusError as e:
         logger.error("OpenRouter API error (status %s): %s", e.status_code, e)
         return _error_fallback(f"AI 服务返回错误 (HTTP {e.status_code})。")
+    except Exception as e:
+        # 兜底：LLM 层任何失败都产出可发送内容，宁发说明邮件不断邮件
+        logger.exception("Unexpected error during summarization")
+        return _error_fallback(f"发生未知错误（{type(e).__name__}），请检查容器日志。")
 
 
 def _build_prompt(news: dict) -> str:

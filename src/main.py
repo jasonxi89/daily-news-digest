@@ -1,5 +1,6 @@
 import logging
 import sys
+from datetime import datetime
 
 from alerter import send_alert
 from emailer import send_email
@@ -13,29 +14,38 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def _generate_summary() -> str:
+    """Fetch news and summarize. summarize_news 内部已兜底 LLM 异常。"""
+    news = fetch_all_news()
+    counts = {k: len(v) for k, v in news.items()}
+    total = sum(counts.values())
+    detail = ", ".join(f"{v} {k}" for k, v in counts.items())
+    logger.info(f"Fetched {total} articles: {detail}")
+    return summarize_news(news)
+
+
+def _generation_failure_notice(error: Exception) -> str:
+    """Fallback email body when fetch/summarize crashes unexpectedly."""
+    today = datetime.now().strftime("%Y-%m-%d")
+    return (
+        f"# {today} 每日新闻摘要\n\n"
+        f"⚠️ 本期摘要生成失败（{type(error).__name__}: {error}），"
+        "请检查容器日志排查原因。\n"
+    )
+
+
 def main():
     logger.info("Starting daily news digest...")
 
-    # Step 1: Fetch news
+    # 生成环节挂了也尝试发说明邮件，宁发说明邮件不断邮件
     try:
-        news = fetch_all_news()
-        counts = {k: len(v) for k, v in news.items()}
-        total = sum(counts.values())
-        detail = ", ".join(f"{v} {k}" for k, v in counts.items())
-        logger.info(f"Fetched {total} articles: {detail}")
-    except Exception as e:
-        logger.error(f"Failed to fetch news: {e}")
-        sys.exit(1)
-
-    # Step 2: Summarize with LLM
-    try:
-        summary = summarize_news(news)
+        summary = _generate_summary()
         logger.info("Summary generated")
     except Exception as e:
-        logger.error(f"Failed to summarize news: {e}")
-        sys.exit(1)
+        logger.exception("Digest generation failed, sending fallback notice email")
+        summary = _generation_failure_notice(e)
 
-    # Step 3: Send email (send_email already retries internally)
+    # 邮件环节（send_email 内部已重试）；连 fallback 邮件都发不出去才告警退出
     try:
         send_email(summary)
         logger.info("Email sent successfully!")
