@@ -73,3 +73,33 @@ def test_summarize_news_returns_empty_summary_when_no_news():
     result = summarize_news({})
     assert "每日新闻摘要" in result
     assert "暂无新闻" in result
+
+
+def test_should_return_fallback_content_when_any_exception_raised():
+    """summarize_news must catch arbitrary exceptions and return sendable fallback."""
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.side_effect = RuntimeError("boom")
+
+    news = {"tech": [{"title": "T", "summary": "S", "link": "L", "source": "X", "published": "2026-07-04"}]}
+
+    with patch("src.summarizer.openai.OpenAI", return_value=mock_client):
+        result = summarize_news(news)
+
+    assert "摘要生成失败" in result
+    assert "未知错误" in result
+    assert "RuntimeError" in result
+
+
+def test_should_create_client_with_explicit_max_retries():
+    """OpenAI client must be constructed with max_retries=2 explicitly."""
+    fake_stream = _make_stream(["ok"])
+
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.return_value = iter(fake_stream)
+
+    news = {"tech": [{"title": "T", "summary": "S", "link": "L", "source": "X", "published": "2026-07-04"}]}
+
+    with patch("src.summarizer.openai.OpenAI", return_value=mock_client) as mock_openai:
+        summarize_news(news)
+
+    assert mock_openai.call_args.kwargs.get("max_retries") == 2
