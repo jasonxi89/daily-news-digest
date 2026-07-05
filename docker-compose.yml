@@ -5,4 +5,6 @@ services:
     environment:
       - TZ=Asia/Shanghai
       - DAILYHOT_API_URL=http://192.168.1.64:6688
+    volumes:
+      - ./data:/app/data
     restart: unless-stopped

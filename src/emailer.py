@@ -94,11 +94,21 @@ HTML_TEMPLATE = """\
 """
 
 
-def send_email(markdown_content: str) -> None:
+def _format_hours(hours: float) -> str:
+    """Format hours for display: 8.0 -> "8", 15.5 -> "15.5"."""
+    text = f"{hours:.1f}"
+    return text.rstrip("0").rstrip(".")
+
+
+def send_email(markdown_content: str, window_hours: float | None = None) -> None:
     """Convert Markdown to HTML and send as an email via Gmail SMTP.
 
     Reads GMAIL_ADDRESS, GMAIL_APP_PASSWORD, and RECIPIENT_EMAIL from
     environment variables.
+
+    Args:
+        markdown_content: Digest body in Markdown.
+        window_hours: 本期覆盖的时间窗口（小时），标注在主题和正文中。
 
     Raises:
         ValueError: If required environment variables are missing.
@@ -121,6 +131,12 @@ def send_email(markdown_content: str) -> None:
 
     today = datetime.now().strftime("%Y-%m-%d")
     subject = f"每日新闻摘要 - {today}"
+    if window_hours is not None:
+        hours_text = _format_hours(window_hours)
+        subject += f"（过去 {hours_text} 小时）"
+        markdown_content = (
+            f"> 本期窗口：过去 {hours_text} 小时的新闻\n\n{markdown_content}"
+        )
 
     html_body = markdown.markdown(
         markdown_content,

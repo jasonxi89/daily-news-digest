@@ -1,6 +1,6 @@
 """
 News fetcher module - fetches articles from RSS feeds and APIs,
-filters to last 24 hours, returns categorized results.
+filters to a configurable time window, returns categorized results.
 """
 
 import logging
@@ -280,7 +280,7 @@ def _fetch_rss(source: dict, cutoff: datetime) -> list[dict]:
 
 
 def _fetch_hacker_news(cutoff: datetime) -> list[dict]:
-    """Fetch top Hacker News stories from the past 24 hours."""
+    """Fetch top Hacker News stories published after the cutoff."""
     articles = []
     try:
         resp = requests.get(HACKER_NEWS_TOP_STORIES_URL, timeout=FETCH_TIMEOUT)
@@ -369,15 +369,18 @@ def _fetch_health_hot() -> dict[str, list[dict]]:
     return result
 
 
-def fetch_all_news() -> dict[str, list[dict]]:
+def fetch_all_news(window_hours: float = 24) -> dict[str, list[dict]]:
     """
-    Fetch news from all sources in parallel, filter to last 24 hours.
+    Fetch news from all sources in parallel, filter to the given time window.
+
+    Args:
+        window_hours: Only keep articles published within the last N hours.
 
     Returns:
         dict with "international" and "tech" lists of article dicts.
         Each article: {"title", "summary", "link", "source", "published"}
     """
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=window_hours)
 
     categories: dict[str, list[dict]] = {
         "international": [],

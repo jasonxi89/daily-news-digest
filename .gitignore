@@ -25,3 +25,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Run state (volume mount for last_success.json)
+data/
