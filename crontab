@@ -1,4 +1,4 @@
-# 7:00 AM Asia/Shanghai (container timezone)
+# 北京时间 07:00 (container timezone Asia/Shanghai; = 23:00 UTC 前一天)
 0 7 * * * . /app/.env.sh && cd /app && python src/main.py >> /var/log/cron.log 2>&1
-# 7:00 AM PST = 23:00 Asia/Shanghai
+# 北京时间 23:00 (= 15:00 UTC)
 0 23 * * * . /app/.env.sh && cd /app && python src/main.py >> /var/log/cron.log 2>&1
