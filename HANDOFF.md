@@ -7,8 +7,8 @@
 北京时间 **07:00 / 23:00** 各跑一次，每次只覆盖上次成功发送之后的新闻（双窗口，不重叠、省一半 token）。
 
 ## 当前状态
-- 稳定运行中，部署镜像 SHA **`ca42c6c`**（2026-07-04 可靠性批次已部署验证）。
-- 2026-07-30 新增 **AI 前沿板块**（`ai_dev` 分类）：11 个 AI 工程博客/社区源（Simon Willison、HF Blog、Latent Space、Interconnects、Ahead of AI、DeepMind、OpenAI News、HF Daily Papers、r/LocalLLaMA、Lobsters AI、量子位）+ HN 讨论帖按标题 AI 关键词自动路由（`is_ai_related`，HN_TOP_N 30→50）；邮件新增"🤖 AI 前沿（开发者视角）"章节。**待部署验证后更新此处 SHA**。
+- 稳定运行中，部署镜像 SHA **`da88590`**（2026-07-30 部署，容器内实测抓取 AI_DEV 53 篇、状态文件完好、旧镜像已清）。
+- 2026-07-30 新增 **AI 前沿板块**（`ai_dev` 分类）：11 个 AI 工程博客/社区源（Simon Willison、HF Blog、Latent Space、Interconnects、Ahead of AI、DeepMind、OpenAI News、HF Daily Papers、r/LocalLLaMA、Lobsters AI、量子位）+ HN 讨论帖按标题 AI 关键词自动路由（`is_ai_related`，HN_TOP_N 30→50）；邮件新增"🤖 AI 前沿（开发者视角）"章节。
 - 已具备：邮件重试（指数退避）、LLM 异常全兜底（宁发说明邮件不断邮件）、双窗口自动交替/失败扩窗、webhook 失败告警。
 - ⚠️ `ALERT_WEBHOOK_URL` **未配置** → 告警静默禁用（NAS compose 里没填，等用户给 webhook）。
 - 无版本号项目，靠**镜像 SHA + 容器日志 + 收到邮件**验证，不走 `/api/health`。
