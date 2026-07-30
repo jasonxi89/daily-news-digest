@@ -6,7 +6,8 @@ Automatically fetches global news twice a day, summarizes and translates to Chin
 
 ## Features
 
-- **10+ news sources**: BBC, CNN, Al Jazeera, Google News, Hacker News, TechCrunch, Ars Technica, MarketWatch, and more
+- **40+ news sources**: BBC, CNN, Al Jazeera, Google News, Hacker News, TechCrunch, Ars Technica, MarketWatch, and more
+- **AI dev radar**: dedicated "AI 前沿" section for developers, sourced from AI engineering blogs and communities (Simon Willison, Hugging Face, OpenAI, DeepMind, Latent Space, Interconnects, r/LocalLLaMA, Lobsters, 量子位); AI-related Hacker News threads are auto-routed here by title keywords
 - **AI summarization**: LLM ranks by importance, translates to Chinese, identifies trends, deduplicates across sources
 - **Email delivery**: Gmail SMTP with retry + exponential backoff, supports multiple recipients
 - **Dual-window scheduling**: runs at 07:00 and 23:00 Beijing time; each run only covers news since the last successful send (no overlap, half the tokens)
@@ -100,7 +101,8 @@ Each successful email send records its time to `STATE_FILE` (persisted via the `
 
 ## 功能
 
-- **10+ 新闻源**：BBC、CNN、Al Jazeera、Google News、Hacker News、TechCrunch、Ars Technica 等
+- **40+ 新闻源**：BBC、CNN、Al Jazeera、Google News、Hacker News、TechCrunch、Ars Technica 等
+- **AI 前沿板块**：面向程序员的 AI 技术动态，来自 AI 工程博客与社区（Simon Willison、Hugging Face、OpenAI、DeepMind、Latent Space、Interconnects、r/LocalLLaMA、Lobsters、量子位）；HN 上 AI 相关讨论帖按标题关键词自动归入此板块
 - **AI 总结**：LLM 按重要性排序，翻译成中文，识别趋势，跨源去重
 - **邮件推送**：Gmail SMTP 发送，带重试+指数退避，支持多收件人
 - **双窗口机制**：北京时间 07:00 / 23:00 各跑一次，每次只总结上次成功发送之后的新闻（不重叠，省一半 token）

@@ -173,11 +173,60 @@ CN_HEALTH_RSS_SOURCES = [
     },
 ]
 
+AI_DEV_RSS_SOURCES = [
+    {
+        "name": "Simon Willison",
+        "url": "https://simonwillison.net/atom/everything/",
+    },
+    {
+        "name": "Hugging Face Blog",
+        "url": "https://huggingface.co/blog/feed.xml",
+    },
+    {
+        "name": "Latent Space",
+        "url": "https://www.latent.space/feed",
+    },
+    {
+        "name": "Interconnects",
+        "url": "https://www.interconnects.ai/feed",
+    },
+    {
+        "name": "Ahead of AI",
+        "url": "https://magazine.sebastianraschka.com/feed",
+    },
+    {
+        "name": "Google DeepMind Blog",
+        "url": "https://deepmind.google/blog/rss.xml",
+    },
+    {
+        "name": "OpenAI News",
+        "url": "https://openai.com/news/rss.xml",
+    },
+    {
+        "name": "HF Daily Papers",
+        "url": "https://papers.takara.ai/api/feed",
+    },
+    {
+        "name": "r/LocalLLaMA",
+        "url": "https://www.reddit.com/r/LocalLLaMA/top/.rss?t=day",
+        "headers": True,
+    },
+    {
+        "name": "Lobsters AI",
+        "url": "https://lobste.rs/t/ai.rss",
+    },
+    {
+        "name": "量子位",
+        "url": "https://www.qbitai.com/feed",
+        "headers": True,
+    },
+]
+
 HACKER_NEWS_TOP_STORIES_URL = "https://hacker-news.firebaseio.com/v0/topstories.json"
 HACKER_NEWS_ITEM_URL = "https://hacker-news.firebaseio.com/v0/item/{id}.json"
 
 FETCH_TIMEOUT = 10  # seconds per source
-HN_TOP_N = 30  # number of HN stories to fetch
+HN_TOP_N = 50  # number of HN stories to fetch
 
 # --- DailyHotApi 医疗健康热搜 ---
 
@@ -216,6 +265,25 @@ HEALTH_KEYWORDS = [
 
 # 编译为正则，一次匹配所有关键词
 _HEALTH_PATTERN = re.compile("|".join(re.escape(kw) for kw in HEALTH_KEYWORDS))
+
+# HN 标题命中这些关键词的讨论帖归入 ai_dev 板块（其余留在 tech）
+AI_TITLE_KEYWORDS = [
+    "ai", "llm", "llms", "gpt", "claude", "gemini", "openai", "anthropic",
+    "deepseek", "qwen", "llama", "mistral", "grok", "transformer", "diffusion",
+    "rag", "agent", "agents", "agentic", "fine-tuning", "finetuning",
+    "machine learning", "deep learning", "neural network", "embedding",
+    "embeddings", "prompt", "copilot", "chatgpt", "hugging face",
+    "vllm", "ollama", "cursor", "mcp",
+]
+_AI_TITLE_PATTERN = re.compile(
+    r"\b(" + "|".join(re.escape(kw) for kw in AI_TITLE_KEYWORDS) + r")\b",
+    re.IGNORECASE,
+)
+
+
+def is_ai_related(title: str) -> bool:
+    """判断英文标题是否 AI 相关（用于 HN 讨论帖路由）。"""
+    return bool(_AI_TITLE_PATTERN.search(title))
 
 
 def _parse_published_date(entry: Any) -> datetime | None:
@@ -377,7 +445,7 @@ def fetch_all_news(window_hours: float = 24) -> dict[str, list[dict]]:
         window_hours: Only keep articles published within the last N hours.
 
     Returns:
-        dict with "international" and "tech" lists of article dicts.
+        dict mapping category name to a list of article dicts.
         Each article: {"title", "summary", "link", "source", "published"}
     """
     cutoff = datetime.now(timezone.utc) - timedelta(hours=window_hours)
@@ -385,6 +453,7 @@ def fetch_all_news(window_hours: float = 24) -> dict[str, list[dict]]:
     categories: dict[str, list[dict]] = {
         "international": [],
         "tech": [],
+        "ai_dev": [],
         "finance": [],
         "cn_news": [],
         "cn_tech": [],
@@ -395,6 +464,7 @@ def fetch_all_news(window_hours: float = 24) -> dict[str, list[dict]]:
     source_map = [
         (INTERNATIONAL_RSS_SOURCES, "international"),
         (TECH_RSS_SOURCES, "tech"),
+        (AI_DEV_RSS_SOURCES, "ai_dev"),
         (FINANCE_RSS_SOURCES, "finance"),
         (CN_NEWS_RSS_SOURCES, "cn_news"),
         (CN_TECH_RSS_SOURCES, "cn_tech"),
@@ -418,9 +488,16 @@ def fetch_all_news(window_hours: float = 24) -> dict[str, list[dict]]:
             category, source_name = futures[future]
             try:
                 articles = future.result()
-                categories[category].extend(articles)
             except Exception as exc:
                 logger.warning("Unexpected error fetching %s: %s", source_name, exc)
+                continue
+            if source_name == "Hacker News":
+                # AI 相关讨论帖归入 ai_dev，其余留在 tech
+                for article in articles:
+                    target = "ai_dev" if is_ai_related(article["title"]) else category
+                    categories[target].append(article)
+            else:
+                categories[category].extend(articles)
 
     for cat_articles in categories.values():
         cat_articles.sort(key=lambda a: a["published"], reverse=True)

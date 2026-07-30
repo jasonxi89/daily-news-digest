@@ -1,5 +1,5 @@
 # HANDOFF — daily-news-digest
-> 跨 agent/IDE 接手文档 | 最后更新: 2026-07-17 | 改动项目后请同步更新此文档
+> 跨 agent/IDE 接手文档 | 最后更新: 2026-07-30 | 改动项目后请同步更新此文档
 
 ## 项目定位
 每日新闻摘要邮件服务：定时抓取全球新闻 → OpenRouter LLM 总结翻译成中文 Markdown → Gmail SMTP 推送邮件。
@@ -8,6 +8,7 @@
 
 ## 当前状态
 - 稳定运行中，部署镜像 SHA **`ca42c6c`**（2026-07-04 可靠性批次已部署验证）。
+- 2026-07-30 新增 **AI 前沿板块**（`ai_dev` 分类）：11 个 AI 工程博客/社区源（Simon Willison、HF Blog、Latent Space、Interconnects、Ahead of AI、DeepMind、OpenAI News、HF Daily Papers、r/LocalLLaMA、Lobsters AI、量子位）+ HN 讨论帖按标题 AI 关键词自动路由（`is_ai_related`，HN_TOP_N 30→50）；邮件新增"🤖 AI 前沿（开发者视角）"章节。**待部署验证后更新此处 SHA**。
 - 已具备：邮件重试（指数退避）、LLM 异常全兜底（宁发说明邮件不断邮件）、双窗口自动交替/失败扩窗、webhook 失败告警。
 - ⚠️ `ALERT_WEBHOOK_URL` **未配置** → 告警静默禁用（NAS compose 里没填，等用户给 webhook）。
 - 无版本号项目，靠**镜像 SHA + 容器日志 + 收到邮件**验证，不走 `/api/health`。
@@ -16,13 +17,13 @@
 - Python 3.11 + feedparser + requests + **openai SDK（走 OpenRouter 网关）** + Gmail SMTP；Docker Alpine + crond；GitHub Actions CI（pytest 门控 + build/push 到 Docker Hub）。
 - 默认模型 `deepseek/deepseek-v4-pro`，切模型改 env `OPENROUTER_MODEL`。历史用过 Anthropic API，**已完全迁走，所有 `ANTHROPIC_*` 配置废弃**。
 - `src/main.py` — 编排入口：算窗口 → 抓取+总结 → 发邮件 → 记录成功时间；每层异常都有兜底。
-- `src/news_fetcher.py` — 抓 38 个源 URL，7 大分类（international/tech/finance/cn_news/cn_tech/cn_finance/cn_health）+ DailyHot 医疗热搜。**唯一无单测的模块**。
+- `src/news_fetcher.py` — 抓 49 个源 URL，8 大分类（international/tech/ai_dev/finance/cn_news/cn_tech/cn_finance/cn_health）+ DailyHot 医疗热搜；HN 讨论帖按 `is_ai_related` 关键词路由到 ai_dev。抓取函数（网络层）仍无单测，纯函数已覆盖。
 - `src/summarizer.py` — OpenRouter 流式总结（`stream=True`, timeout=600, max_tokens=32768），逐 chunk 累加，各类 API 异常兜底为说明邮件。
 - `src/emailer.py` — Gmail `SMTP_SSL:465`，重试+指数退避，`RECIPIENT_EMAIL` 逗号分隔多收件人。
 - `src/alerter.py` — POST `ALERT_WEBHOOK_URL`，JSON `{title, body, desp}`（兼容 Server酱），留空即禁用。
 - `src/run_state.py` — 双窗口状态：成功后写 `/app/data/last_success.json`，下次窗口 = now − 上次成功（下限 1h、封顶 48h）；无状态文件回退 `DEFAULT_WINDOW_HOURS`(24)。
 - `entrypoint.sh` — 用 python `shlex.quote` 把 env 转义写入 `/app/.env.sh` 并 `chmod 600`（cron job source 它）；`crontab` 定义两条定时。
-- `tests/` — 21 个测试，覆盖 summarizer/emailer/alerter/run_state。
+- `tests/` — 31 个测试，覆盖 summarizer/emailer/alerter/run_state/news_fetcher（后者仅纯函数：AI 路由关键词、日期解析）。
 
 ## 常用命令
 ```bash
@@ -48,8 +49,9 @@ py C:\Users\goodb\nas_ssh.py logs daily-news-digest
 
 ## 进行中 / TODO
 - [ ] 配置 `ALERT_WEBHOOK_URL`（目前告警静默，发送失败无外部通知）。
-- [ ] 给 `news_fetcher.py` 补单测（当前唯一无测试模块）。
+- [ ] `news_fetcher.py` 网络层抓取函数补单测（纯函数部分 2026-07-30 已覆盖）。
 - [ ] 评估 "fetch 全挂仍推进窗口" 语义：是否该失败时不推进、留给下次扩窗补捞。
+- [ ] 观察 AI 前沿板块信噪比：HF Daily Papers（第三方镜像 papers.takara.ai）与 r/LocalLLaMA 若噪音大可再调关键词/去源。
 
 ## 相关资源
 - 仓库：https://github.com/jasonxi89/daily-news-digest ｜ 镜像：Docker Hub `jasonxi89/daily-news-digest:<sha>`
