@@ -1,5 +1,5 @@
 # HANDOFF — daily-news-digest
-> 跨 agent/IDE 接手文档 | 最后更新: 2026-07-30 | 改动项目后请同步更新此文档
+> 跨 agent/IDE 接手文档 | 最后更新: 2026-08-22 | 改动项目后请同步更新此文档
 
 ## 项目定位
 每日新闻摘要邮件服务：定时抓取全球新闻 → OpenRouter LLM 总结翻译成中文 Markdown → Gmail SMTP 推送邮件。
@@ -7,7 +7,8 @@
 北京时间 **07:00 / 23:00** 各跑一次，每次只覆盖上次成功发送之后的新闻（双窗口，不重叠、省一半 token）。
 
 ## 当前状态
-- 稳定运行中，部署镜像 SHA **`da88590`**（2026-07-30 部署，容器内实测抓取 AI_DEV 53 篇、状态文件完好、旧镜像已清）。
+- 稳定运行中，部署镜像 SHA **`b939ee0`**（2026-08-22 部署，切 DeepSeek 官网直连，容器内探针实测 API 连通）。
+- 2026-08-22 起 **LLM 走 DeepSeek 官网直连**（compose env `OPENROUTER_BASE_URL=https://api.deepseek.com`，模型 `deepseek-v4-pro` 无前缀）；回滚删 BASE_URL env + 换回 OpenRouter key（备份 `daily-news-digest.yaml.bak.preds-direct`）。
 - 2026-07-30 新增 **AI 前沿板块**（`ai_dev` 分类）：11 个 AI 工程博客/社区源（Simon Willison、HF Blog、Latent Space、Interconnects、Ahead of AI、DeepMind、OpenAI News、HF Daily Papers、r/LocalLLaMA、Lobsters AI、量子位）+ HN 讨论帖按标题 AI 关键词自动路由（`is_ai_related`，HN_TOP_N 30→50）；邮件新增"🤖 AI 前沿（开发者视角）"章节。
 - 已具备：邮件重试（指数退避）、LLM 异常全兜底（宁发说明邮件不断邮件）、双窗口自动交替/失败扩窗、webhook 失败告警。
 - ⚠️ `ALERT_WEBHOOK_URL` **未配置** → 告警静默禁用（NAS compose 里没填，等用户给 webhook）。
@@ -15,7 +16,7 @@
 
 ## 技术栈与结构
 - Python 3.11 + feedparser + requests + **openai SDK（走 OpenRouter 网关）** + Gmail SMTP；Docker Alpine + crond；GitHub Actions CI（pytest 门控 + build/push 到 Docker Hub）。
-- 默认模型 `deepseek/deepseek-v4-pro`，切模型改 env `OPENROUTER_MODEL`。历史用过 Anthropic API，**已完全迁走，所有 `ANTHROPIC_*` 配置废弃**。
+- 模型/渠道由 env 决定：`OPENROUTER_MODEL`（现 `deepseek-v4-pro`）+ `OPENROUTER_BASE_URL`（现 DeepSeek 官网；代码默认 OpenRouter）。历史用过 Anthropic API，**已完全迁走，所有 `ANTHROPIC_*` 配置废弃**。
 - `src/main.py` — 编排入口：算窗口 → 抓取+总结 → 发邮件 → 记录成功时间；每层异常都有兜底。
 - `src/news_fetcher.py` — 抓 49 个源 URL，8 大分类（international/tech/ai_dev/finance/cn_news/cn_tech/cn_finance/cn_health）+ DailyHot 医疗热搜；HN 讨论帖按 `is_ai_related` 关键词路由到 ai_dev。抓取函数（网络层）仍无单测，纯函数已覆盖。
 - `src/summarizer.py` — OpenRouter 流式总结（`stream=True`, timeout=600, max_tokens=32768），逐 chunk 累加，各类 API 异常兜底为说明邮件。
