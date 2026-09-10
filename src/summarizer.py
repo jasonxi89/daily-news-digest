@@ -35,7 +35,7 @@ def summarize_news(news: dict) -> str:
         )
         response = client.chat.completions.create(
             model=os.environ.get("OPENROUTER_MODEL", "deepseek-flash"),
-            max_tokens=32768,
+            max_tokens=65536,
             messages=[{"role": "user", "content": prompt}],
             stream=True,
         )

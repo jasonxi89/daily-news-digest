@@ -8,7 +8,7 @@
 
 ## 当前状态
 - 稳定运行中，部署镜像 SHA = main HEAD（2026-09-10 部署，模型切 `deepseek-flash`）；上一版 **`b939ee0`** compose 备份 `daily-news-digest.yaml.bak.pre-flash`。
-- **LLM 走 DeepSeek 官网直连**（compose env `OPENROUTER_BASE_URL=https://api.deepseek.com`），模型 **`deepseek-flash`**（= DeepSeek-V4.1-Flash，2026-09-10 切，默认 thinking，max_tokens 32768 足够容纳 reasoning）；`deepseek-v4-pro` 官方 9/14 起也路由到 Flash。代码默认值同步改为 DeepSeek 直连 + `deepseek-flash`。
+- **LLM 走 DeepSeek 官网直连**（compose env `OPENROUTER_BASE_URL=https://api.deepseek.com`），模型 **`deepseek-flash`**（= DeepSeek-V4.1-Flash，2026-09-10 切，默认 thinking，max_tokens 32768→65536 留足 reasoning 余量）；`deepseek-v4-pro` 官方 9/14 起也路由到 Flash。代码默认值同步改为 DeepSeek 直连 + `deepseek-flash`。
 - 2026-07-30 新增 **AI 前沿板块**（`ai_dev` 分类）：11 个 AI 工程博客/社区源（Simon Willison、HF Blog、Latent Space、Interconnects、Ahead of AI、DeepMind、OpenAI News、HF Daily Papers、r/LocalLLaMA、Lobsters AI、量子位）+ HN 讨论帖按标题 AI 关键词自动路由（`is_ai_related`，HN_TOP_N 30→50）；邮件新增"🤖 AI 前沿（开发者视角）"章节。
 - 已具备：邮件重试（指数退避）、LLM 异常全兜底（宁发说明邮件不断邮件）、双窗口自动交替/失败扩窗、webhook 失败告警。
 - ⚠️ `ALERT_WEBHOOK_URL` **未配置** → 告警静默禁用（NAS compose 里没填，等用户给 webhook）。
@@ -19,7 +19,7 @@
 - 模型/渠道由 env 决定：`OPENROUTER_MODEL`（现 `deepseek-flash`）+ `OPENROUTER_BASE_URL`（现 DeepSeek 官网，代码默认亦然）。历史用过 Anthropic API，**已完全迁走，所有 `ANTHROPIC_*` 配置废弃**。
 - `src/main.py` — 编排入口：算窗口 → 抓取+总结 → 发邮件 → 记录成功时间；每层异常都有兜底。
 - `src/news_fetcher.py` — 抓 49 个源 URL，8 大分类（international/tech/ai_dev/finance/cn_news/cn_tech/cn_finance/cn_health）+ DailyHot 医疗热搜；HN 讨论帖按 `is_ai_related` 关键词路由到 ai_dev。抓取函数（网络层）仍无单测，纯函数已覆盖。
-- `src/summarizer.py` — OpenRouter 流式总结（`stream=True`, timeout=600, max_tokens=32768），逐 chunk 累加，各类 API 异常兜底为说明邮件。
+- `src/summarizer.py` — OpenRouter 流式总结（`stream=True`, timeout=600, max_tokens=65536），逐 chunk 累加，各类 API 异常兜底为说明邮件。
 - `src/emailer.py` — Gmail `SMTP_SSL:465`，重试+指数退避，`RECIPIENT_EMAIL` 逗号分隔多收件人。
 - `src/alerter.py` — POST `ALERT_WEBHOOK_URL`，JSON `{title, body, desp}`（兼容 Server酱），留空即禁用。
 - `src/run_state.py` — 双窗口状态：成功后写 `/app/data/last_success.json`，下次窗口 = now − 上次成功（下限 1h、封顶 48h）；无状态文件回退 `DEFAULT_WINDOW_HOURS`(24)。
