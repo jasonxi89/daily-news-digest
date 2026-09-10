@@ -28,13 +28,13 @@ def summarize_news(news: dict) -> str:
 
     try:
         client = openai.OpenAI(
-            base_url=os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
+            base_url=os.environ.get("OPENROUTER_BASE_URL", "https://api.deepseek.com"),
             api_key=os.environ.get("OPENROUTER_API_KEY", ""),
             timeout=600,
             max_retries=2,
         )
         response = client.chat.completions.create(
-            model=os.environ.get("OPENROUTER_MODEL", "deepseek/deepseek-v4-pro"),
+            model=os.environ.get("OPENROUTER_MODEL", "deepseek-flash"),
             max_tokens=32768,
             messages=[{"role": "user", "content": prompt}],
             stream=True,

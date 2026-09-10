@@ -42,7 +42,7 @@ def test_summarize_news_accumulates_stream_chunks():
 
 
 def test_summarize_news_uses_streaming_and_default_model(monkeypatch):
-    """summarize_news must pass stream=True and default to deepseek/deepseek-v4-pro."""
+    """summarize_news must pass stream=True and default to deepseek-flash."""
     monkeypatch.delenv("OPENROUTER_MODEL", raising=False)
 
     fake_stream = _make_stream(["ok"])
@@ -63,8 +63,8 @@ def test_summarize_news_uses_streaming_and_default_model(monkeypatch):
 
     call_kwargs = mock_completions.create.call_args
     assert call_kwargs.kwargs.get("stream") is True, "stream=True must be set"
-    assert call_kwargs.kwargs.get("model") == "deepseek/deepseek-v4-pro", (
-        f"default model should be deepseek/deepseek-v4-pro, got {call_kwargs.kwargs.get('model')}"
+    assert call_kwargs.kwargs.get("model") == "deepseek-flash", (
+        f"default model should be deepseek-flash, got {call_kwargs.kwargs.get('model')}"
     )
 
 
