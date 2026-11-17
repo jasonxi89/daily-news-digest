@@ -1,12 +1,33 @@
-"""News summarizer module using OpenRouter API for Chinese translation and ranking."""
+"""News summarizer module using the Claude API for Chinese translation and ranking."""
 
 import logging
 import os
+import time
 from datetime import datetime
 
-import openai
+import anthropic
+from anthropic.types.beta import BetaMessage
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_MODEL = "claude-opus-5-5"
+DEFAULT_EFFORT = "max"
+ALLOWED_EFFORTS = ("low", "medium", "high", "xhigh", "max")
+# 思考也算在 max_tokens 里，max 档思考量很大，所以直接给到模型的输出上限
+MAX_OUTPUT_TOKENS = 128000
+SERVER_SIDE_FALLBACK_BETA = "server-side-fallback-2026-07-01"
+# 流式请求下这是相邻两段数据之间的读超时，不是整次请求的时长上限；
+# max 档一次摘要可能要 5 到 15 分钟
+READ_TIMEOUT_SECONDS = 600
+CONNECT_TIMEOUT_SECONDS = 10
+MAX_RETRIES = 2
+TRUNCATED_STOP_REASONS = ("max_tokens", "model_context_window_exceeded")
+TRUNCATION_NOTICE = "\n\n---\n\n⚠️ 本期摘要输出达到长度上限被截断，以上是已生成的部分。"
+MAX_ERROR_DETAIL_CHARS = 200
+
+
+class SummaryUnavailableError(Exception):
+    """Claude 这次给不出可用的摘要；异常消息会原样写进说明邮件。"""
 
 
 def summarize_news(news: dict) -> str:
@@ -19,47 +40,125 @@ def summarize_news(news: dict) -> str:
     Returns:
         Markdown string with ranked, translated news summaries.
     """
-    all_empty = all(len(news.get(k, [])) == 0 for k in news)
+    all_empty = all(len(news.get(key, [])) == 0 for key in news)
     if all_empty:
         today = datetime.now().strftime("%Y-%m-%d")
         return f"# {today} 每日新闻摘要\n\n今日暂无新闻更新。"
 
     prompt = _build_prompt(news)
 
+    # 兜底：LLM 层任何失败都产出可发送内容，宁发说明邮件不断邮件
     try:
-        client = openai.OpenAI(
-            base_url=os.environ.get("OPENROUTER_BASE_URL", "https://api.deepseek.com"),
-            api_key=os.environ.get("OPENROUTER_API_KEY", ""),
-            timeout=600,
-            max_retries=2,
-        )
-        response = client.chat.completions.create(
-            model=os.environ.get("OPENROUTER_MODEL", "deepseek-flash"),
-            max_tokens=65536,
-            messages=[{"role": "user", "content": prompt}],
-            stream=True,
-        )
-        parts = []
-        for chunk in response:
-            delta = chunk.choices[0].delta.content if chunk.choices else None
-            if delta:
-                parts.append(delta)
-        result = "".join(parts)
-        logger.info("summarize completed, total_chars=%s", len(result))
-        return result
-    except openai.APIConnectionError as e:
-        logger.error("Failed to connect to OpenRouter API: %s", e)
+        return _generate_summary(prompt)
+    except SummaryUnavailableError as error:
+        logger.error("Summary unavailable: %s", error)
+        return _error_fallback(str(error))
+    except anthropic.APIConnectionError as error:
+        logger.error("Failed to connect to Claude API: %s", error)
         return _error_fallback("无法连接到 AI 服务，请检查网络连接。")
-    except openai.AuthenticationError as e:
-        logger.error("OpenRouter API authentication failed: %s", e)
+    except anthropic.AuthenticationError as error:
+        logger.error("Claude API authentication failed request_id=%s: %s", error.request_id, error)
         return _error_fallback("AI 服务认证失败，请检查 API Key。")
-    except openai.APIStatusError as e:
-        logger.error("OpenRouter API error (status %s): %s", e.status_code, e)
-        return _error_fallback(f"AI 服务返回错误 (HTTP {e.status_code})。")
-    except Exception as e:
-        # 兜底：LLM 层任何失败都产出可发送内容，宁发说明邮件不断邮件
+    except anthropic.RateLimitError as error:
+        logger.error("Claude API rate limited request_id=%s: %s", error.request_id, error)
+        return _error_fallback(f"AI 服务限流 (HTTP 429)：{_describe_api_error(error)}")
+    except anthropic.APIStatusError as error:
+        logger.error(
+            "Claude API error status=%s request_id=%s: %s",
+            error.status_code,
+            error.request_id,
+            error,
+        )
+        reason = f"AI 服务返回错误 (HTTP {error.status_code})：{_describe_api_error(error)}"
+        return _error_fallback(reason)
+    except Exception as error:
         logger.exception("Unexpected error during summarization")
-        return _error_fallback(f"发生未知错误（{type(e).__name__}），请检查容器日志。")
+        return _error_fallback(f"发生未知错误（{type(error).__name__}），请检查容器日志。")
+
+
+def _generate_summary(prompt: str) -> str:
+    """Send one streaming request to Claude and return the digest body.
+
+    Raises SummaryUnavailableError when the configuration is invalid or Claude
+    returns nothing usable; SDK errors propagate to the caller's fallback chain.
+    """
+    request = _build_request(prompt)
+    client = _create_client()
+    started_at = time.monotonic()
+    # 必须流式：这么大的 max_tokens，非流式请求 SDK 会直接拒发，长连接也容易中途被掐
+    with client.beta.messages.stream(**request) as stream:
+        final_message = stream.get_final_message()
+    summary = "".join(block.text for block in final_message.content if block.type == "text")
+    _log_usage(final_message, time.monotonic() - started_at, len(summary))
+    return _check_summary(final_message, summary)
+
+
+def _create_client() -> anthropic.Anthropic:
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+    if not api_key:
+        raise SummaryUnavailableError("未配置环境变量 ANTHROPIC_API_KEY。")
+    return anthropic.Anthropic(
+        api_key=api_key,
+        timeout=anthropic.Timeout(READ_TIMEOUT_SECONDS, connect=CONNECT_TIMEOUT_SECONDS),
+        max_retries=MAX_RETRIES,
+    )
+
+
+def _build_request(prompt: str) -> dict:
+    return {
+        "model": os.environ.get("CLAUDE_MODEL", "").strip() or DEFAULT_MODEL,
+        "max_tokens": MAX_OUTPUT_TOKENS,
+        "messages": [{"role": "user", "content": prompt}],
+        "output_config": {"effort": _read_effort()},
+        # 官方拒答兜底：Claude 因安全策略拒答时，服务端在同一次请求里换模型重跑
+        "betas": [SERVER_SIDE_FALLBACK_BETA],
+        "fallbacks": "default",
+    }
+
+
+def _read_effort() -> str:
+    effort = os.environ.get("CLAUDE_EFFORT", "").strip() or DEFAULT_EFFORT
+    if effort not in ALLOWED_EFFORTS:
+        raise SummaryUnavailableError(
+            f"环境变量 CLAUDE_EFFORT={effort!r} 无效，可选：{', '.join(ALLOWED_EFFORTS)}。"
+        )
+    return effort
+
+
+def _log_usage(final_message: BetaMessage, elapsed_seconds: float, summary_chars: int) -> None:
+    """One line per call so each run's cost can be worked out from the log."""
+    usage = final_message.usage
+    logger.info(
+        "summarize done model=%s stop_reason=%s input_tokens=%s output_tokens=%s "
+        "elapsed_seconds=%.1f total_chars=%s",
+        final_message.model,
+        final_message.stop_reason,
+        usage.input_tokens,
+        usage.output_tokens,
+        elapsed_seconds,
+        summary_chars,
+    )
+
+
+def _check_summary(final_message: BetaMessage, summary: str) -> str:
+    """Return a sendable digest body, or raise with the reason it is not usable."""
+    stop_reason = final_message.stop_reason
+    if stop_reason == "refusal":
+        logger.error("Claude refused the digest request, details=%s", final_message.stop_details)
+        raise SummaryUnavailableError("Claude 因安全策略拒绝了本次摘要请求。")
+    if not summary.strip():
+        raise SummaryUnavailableError(f"模型没有返回正文（stop_reason={stop_reason}）。")
+    if stop_reason in TRUNCATED_STOP_REASONS:
+        logger.warning("Summary truncated, stop_reason=%s; sending the partial digest", stop_reason)
+        return summary + TRUNCATION_NOTICE
+    return summary
+
+
+def _describe_api_error(error: anthropic.APIStatusError) -> str:
+    """Pull the API's own message out of the error body, shortened for the notice email."""
+    detail = error.body.get("error") if isinstance(error.body, dict) else None
+    message = detail.get("message") if isinstance(detail, dict) else None
+    return " ".join(str(message or error).split())[:MAX_ERROR_DETAIL_CHARS]
 
 
 def _build_prompt(news: dict) -> str:
