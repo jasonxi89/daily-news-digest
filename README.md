@@ -1,6 +1,6 @@
 # Daily News Digest — AI-Powered News Summarization Service
 
-Automatically fetches global news twice a day, summarizes and translates to Chinese via the Claude API (default model: `claude-opus-5-5`, effort `max`), and delivers a formatted digest via email.
+Automatically fetches global news twice a day, summarizes and translates to Chinese via the Claude API (default model: `claude-opus-5-5`, effort `high`), and delivers a formatted digest via email.
 
 > History: this project started on the Anthropic API, ran on OpenRouter / DeepSeek through the openai SDK for a while, and since 2026-11 is back on the official `anthropic` SDK. All `OPENROUTER_*` configuration is obsolete.
 
@@ -23,7 +23,7 @@ Copy `config.env.example` to `config.env` and fill in:
 # Claude API (key required; model and effort optional, defaults shown)
 ANTHROPIC_API_KEY=sk-ant-xxx
 CLAUDE_MODEL=claude-opus-5-5
-CLAUDE_EFFORT=max
+CLAUDE_EFFORT=high
 
 # Gmail SMTP (required; use App Password, not account password)
 GMAIL_ADDRESS=your-email@gmail.com
@@ -46,7 +46,7 @@ DEFAULT_WINDOW_HOURS=24
 
 > Generate Gmail App Password at [Google Account → Security → App Passwords](https://myaccount.google.com/apppasswords) (requires 2-Step Verification enabled)
 
-> `CLAUDE_EFFORT` accepts `low` / `medium` / `high` / `xhigh` / `max`. `max` is the slowest and most expensive setting: one digest can take 5 to 15 minutes. Lower it for faster, cheaper runs. An invalid value does not stop the email; the run sends a failure notice that names the problem.
+> `CLAUDE_EFFORT` accepts `low` / `medium` / `high` / `xhigh` / `max`. The default is `high`. `max` is not recommended: measured on a real news volume, one digest took 18 minutes and about $2.70, and its output came within 6% of the model's output limit, so a busier news day would be cut off. An invalid value does not stop the email; the run sends a failure notice that names the problem.
 
 ### Local Testing
 
@@ -89,7 +89,7 @@ Each successful email send records its time to `STATE_FILE` (persisted via the `
 ## Tech Stack
 
 - Python 3.11 + feedparser + requests
-- anthropic SDK → Claude API (default `claude-opus-5-5`, effort `max`, streaming)
+- anthropic SDK → Claude API (default `claude-opus-5-5`, effort `high`, streaming)
 - Gmail SMTP
 - Docker Alpine + crond
 - GitHub Actions CI/CD (pytest gate + build/push)
@@ -98,7 +98,7 @@ Each successful email send records its time to `STATE_FILE` (persisted via the `
 
 # 每日新闻摘要 — AI 新闻总结服务
 
-每天两次自动抓取全球新闻，通过 Claude API（默认 `claude-opus-5-5`，思考强度 `max`）总结翻译成中文，发送邮件摘要。
+每天两次自动抓取全球新闻，通过 Claude API（默认 `claude-opus-5-5`，思考强度 `high`）总结翻译成中文，发送邮件摘要。
 
 > 历史说明：项目最初使用 Anthropic API，中间一段时间通过 openai SDK 走 OpenRouter / DeepSeek，2026-11 起改回官方 `anthropic` SDK，所有 `OPENROUTER_*` 配置已废弃。
 
@@ -118,7 +118,7 @@ Each successful email send records its time to `STATE_FILE` (persisted via the `
 复制 `config.env.example` 为 `config.env`，参考上方英文段落填写：
 
 - `ANTHROPIC_API_KEY` — Claude API key（必填）
-- `CLAUDE_MODEL` / `CLAUDE_EFFORT` — 模型和思考强度（可选，默认 `claude-opus-5-5` / `max`）。强度可选 `low` / `medium` / `high` / `xhigh` / `max`；`max` 最慢也最贵，一次摘要可能要 5 到 15 分钟，嫌慢或嫌贵就降档。填了无效值不会断邮件，会发一封写明原因的失败说明
+- `CLAUDE_MODEL` / `CLAUDE_EFFORT` — 模型和思考强度（可选，默认 `claude-opus-5-5` / `high`）。强度可选 `low` / `medium` / `high` / `xhigh` / `max`；不建议用 `max`：真实新闻量实测一期要 18 分钟、约 2.7 美元，输出贴着模型上限，新闻多一点就会被截断。填了无效值不会断邮件，会发一封写明原因的失败说明
 - `GMAIL_ADDRESS` / `GMAIL_APP_PASSWORD` / `RECIPIENT_EMAIL` — Gmail SMTP（必填）
 - `DAILYHOT_API_URL` — 医疗健康热搜数据源，依赖 NAS 局域网服务 `192.168.1.64:6688`（可选）
 - `ALERT_WEBHOOK_URL` — 失败告警 webhook，留空禁用（可选）
@@ -167,7 +167,7 @@ Cron 定时（容器时区 Asia/Shanghai）：
 ## 技术栈
 
 - Python 3.11 + feedparser + requests
-- anthropic SDK → Claude API（默认 `claude-opus-5-5`，思考强度 `max`，流式）
+- anthropic SDK → Claude API（默认 `claude-opus-5-5`，思考强度 `high`，流式）
 - Gmail SMTP
 - Docker Alpine + crond
 - GitHub Actions CI/CD（pytest 门控 + 构建推送）

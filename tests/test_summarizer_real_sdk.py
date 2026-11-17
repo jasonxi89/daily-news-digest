@@ -92,7 +92,7 @@ def test_should_send_streaming_request_and_parse_reply_when_using_real_sdk(monke
     assert captured["body"]["stream"] is True
     assert captured["body"]["model"] == "claude-opus-5-5"
     assert captured["body"]["max_tokens"] == 128000
-    assert captured["body"]["output_config"] == {"effort": "max"}
+    assert captured["body"]["output_config"] == {"effort": "high"}
     assert captured["body"]["fallbacks"] == "default"
     assert captured["beta_header"] == "server-side-fallback-2026-07-01"
 

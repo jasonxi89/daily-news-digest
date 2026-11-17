@@ -7,8 +7,9 @@
 北京时间 **07:00 / 23:00** 各跑一次，每次只覆盖上次成功发送之后的新闻（双窗口，不重叠、省一半 token）。
 
 ## 当前状态
-- **2026-11-16 起 LLM 改走 Claude API**：官方 `anthropic` SDK 2.3.0，模型 `claude-opus-5-5`，思考强度 `max`（用户指定）。**部署 SHA：待主会话部署后回填**。切换前线上是 `88071f4`（DeepSeek 官网直连 `deepseek-flash`），回滚办法见「约定与坑」。
-- 配置走 compose env：`ANTHROPIC_API_KEY`（必填）、`CLAUDE_MODEL`（默认 `claude-opus-5-5`）、`CLAUDE_EFFORT`（默认 `max`，可选 low / medium / high / xhigh / max）。`OPENROUTER_*` 全部废弃。max 档一次摘要估计要 5 到 15 分钟（估计值，还没实测，部署后以 cron.log 里 `summarize done` 行的 `elapsed_seconds` 为准），07:00 / 23:00 的邮件会相应晚到。
+- **2026-11-16 起 LLM 改走 Claude API**：官方 `anthropic` SDK 2.3.0，模型 `claude-opus-5-5`，思考强度 **`high`**。**部署 SHA：待回填**（compose 里有 Claude key，文件权限 600 root）。切换前线上是 `88071f4`（DeepSeek 官网直连 `deepseek-flash`），回滚办法见「约定与坑」。
+- **为什么是 high 不是 max**：用户最初指定 max，按 max 上线后用真实新闻量各实测了一期（容器内执行，不发邮件）。max：18 分钟，输入 6.4 万、输出 12.1 万 token，输出贴着 12.8 万的模型上限（新闻再多一点就会被截断，或者只剩思考没有正文），2.68 美元。high：4.4 分钟，输入 7.0 万、输出 2.6 万 token，0.80 美元，摘要 1.9 万字、结构完整。用户当天改定 high，一天两期约 1.6 美元。
+- 配置走 compose env：`ANTHROPIC_API_KEY`（必填）、`CLAUDE_MODEL`（默认 `claude-opus-5-5`）、`CLAUDE_EFFORT`（默认 `high`，可选 low / medium / high / xhigh / max）。`OPENROUTER_*` 全部废弃。07:00 / 23:00 的邮件会比以前晚到四五分钟。
 - 2026-07-30 新增 **AI 前沿板块**（`ai_dev` 分类）：11 个 AI 工程博客/社区源（Simon Willison、HF Blog、Latent Space、Interconnects、Ahead of AI、DeepMind、OpenAI News、HF Daily Papers、r/LocalLLaMA、Lobsters AI、量子位）+ HN 讨论帖按标题 AI 关键词自动路由（`is_ai_related`，HN_TOP_N 30→50）；邮件新增"🤖 AI 前沿（开发者视角）"章节。
 - 已具备：邮件重试（指数退避）、LLM 异常全兜底（宁发说明邮件不断邮件）、双窗口自动交替/失败扩窗、webhook 失败告警。
 - ⚠️ `ALERT_WEBHOOK_URL` **未配置** → 告警静默禁用（NAS compose 里没填，等用户给 webhook）。
@@ -16,7 +17,7 @@
 
 ## 技术栈与结构
 - Python 3.11 + feedparser + requests + **官方 anthropic SDK 2.3.0（Claude API，底层是 httpx2）** + Gmail SMTP；Docker Alpine + crond；GitHub Actions CI（pytest 门控 + build/push 到 Docker Hub）。
-- 模型和思考强度由 env 决定：`CLAUDE_MODEL` + `CLAUDE_EFFORT`（代码默认 `claude-opus-5-5` / `max`）。渠道历史：Anthropic API → OpenRouter → DeepSeek 官网直连（后两段用 openai SDK）→ 2026-11-16 回到官方 anthropic SDK。
+- 模型和思考强度由 env 决定：`CLAUDE_MODEL` + `CLAUDE_EFFORT`（代码默认 `claude-opus-5-5` / `high`）。渠道历史：Anthropic API → OpenRouter → DeepSeek 官网直连（后两段用 openai SDK）→ 2026-11-16 回到官方 anthropic SDK。
 - `src/main.py` — 编排入口：算窗口 → 抓取+总结 → 发邮件 → 记录成功时间；每层异常都有兜底。
 - `src/news_fetcher.py` — 抓 49 个源 URL，8 大分类（international/tech/ai_dev/finance/cn_news/cn_tech/cn_finance/cn_health）+ DailyHot 医疗热搜；HN 讨论帖按 `is_ai_related` 关键词路由到 ai_dev。抓取函数（网络层）仍无单测，纯函数已覆盖。
 - `src/summarizer.py` — Claude 流式总结：`client.beta.messages.stream(...)` + `get_final_message()`，max_tokens=128000（思考也算在内），读超时 600 秒、连接超时 10 秒、max_retries=2，带官方拒答兜底（beta `server-side-fallback-2026-07-01` + `fallbacks="default"`）。拒答、空正文、配置错误（key 缺失、`CLAUDE_EFFORT` 无效）和各类 API 异常都兜底为说明邮件；输出被截断时照发已有正文并在末尾加一行说明。每次调用结束打一行 `summarize done model=... stop_reason=... input_tokens=... output_tokens=... elapsed_seconds=...`，用来核算花费。
@@ -50,14 +51,14 @@ docker exec -w /app/src daily-news-digest python -c 'import logging; logging.bas
 - **凭据只在 NAS compose 环境变量**里；`config.env` 已 gitignore、含密钥，切勿提交；本文档与任何提交都**不得写入密钥/授权码**。
 - LLM 长请求：max_tokens=128000 的非流式请求 anthropic SDK 会直接拒发，所以必须用 `messages.stream()`；改总结逻辑时保留流式和逐层兜底（宁发说明邮件不断邮件）。600 秒是相邻两段数据之间的读超时，不是整次请求的时长上限；流中途断开不会自动重试，那一期会发失败说明。
 - **切模型或降档**：改 NAS compose 的 `CLAUDE_MODEL` / `CLAUDE_EFFORT` 后 recreate 容器，不用改代码。`CLAUDE_EFFORT` 填错不会断邮件，会收到一封写明原因的失败说明。
-- **回滚到 DeepSeek 版**：NAS compose 换回切换前的备份（镜像 `88071f4` + `OPENROUTER_*` 三个 env；备份文件名待主会话部署后回填），再 `pull` + `up -d --force-recreate`。
+- **回滚到 DeepSeek 版**：NAS compose 换回切换前的备份（镜像 `88071f4` + `OPENROUTER_*` 三个 env；备份是同目录的 `daily-news-digest.yaml.bak.pre-claude`，里面有原来的 DeepSeek key），再 `pull` + `up -d --force-recreate`。
 - **花费和额度**：Claude key 如果和 video-voice 等项目同属一个 Console 组织，余额和用量上限是共用的；撞到上限时摘要失败，说明邮件里会带接口返回的原话（HTTP 400，usage limits）。每次运行用了多少 token 看 cron.log 里的 `summarize done` 行。
 - 语义注意：fetch 全挂或生成失败也会**发 fallback 说明邮件并推进窗口**（"已送达即覆盖"），不是 bug 是设计。
 - DailyHot 医疗热搜依赖 NAS 局域网 `192.168.1.64:6688`（`DAILYHOT_API_URL`），容器需能访问 LAN。
 - Git：commit message `type: 描述`，**不加 Co-Authored-By**，不写 Claude 进 contributor。
 
 ## 进行中 / TODO
-- [ ] 观察 max 档每次运行的耗时和花费（cron.log 的 `summarize done` 行）；太慢或太贵就把 `CLAUDE_EFFORT` 降到 high 或 medium。
+- [ ] 观察 high 档正式运行的耗时和花费（cron.log 的 `summarize done` 行；实测基线是一期 4.4 分钟、0.80 美元）。想再省就把 `CLAUDE_EFFORT` 降到 medium，不要调回 max。
 - [ ] 配置 `ALERT_WEBHOOK_URL`（目前告警静默，发送失败无外部通知）。
 - [ ] `news_fetcher.py` 网络层抓取函数补单测（纯函数部分 2026-07-30 已覆盖）。
 - [ ] 评估 "fetch 全挂仍推进窗口" 语义：是否该失败时不推进、留给下次扩窗补捞。

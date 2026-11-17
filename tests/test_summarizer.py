@@ -27,14 +27,14 @@ def test_should_join_text_blocks_and_skip_thinking_when_claude_responds(claude):
     assert summarize_news(NEWS) == "# 摘要\n正文"
 
 
-def test_should_request_opus_at_max_effort_with_refusal_fallback_by_default(claude):
+def test_should_request_opus_at_high_effort_with_refusal_fallback_by_default(claude):
     claude.stream.return_value = FakeStreamManager(final_message([text_block("ok")]))
 
     summarize_news(NEWS)
 
     request = claude.stream.call_args.kwargs
     assert request["model"] == "claude-opus-5-5"
-    assert request["output_config"] == {"effort": "max"}
+    assert request["output_config"] == {"effort": "high"}
     assert request["max_tokens"] == 128000
     assert request["betas"] == ["server-side-fallback-2026-07-01"]
     assert request["fallbacks"] == "default"
@@ -46,14 +46,14 @@ def test_should_request_opus_at_max_effort_with_refusal_fallback_by_default(clau
 
 def test_should_use_model_and_effort_from_environment_when_set(claude, monkeypatch):
     monkeypatch.setenv("CLAUDE_MODEL", "claude-sonnet-5-5")
-    monkeypatch.setenv("CLAUDE_EFFORT", "high")
+    monkeypatch.setenv("CLAUDE_EFFORT", "medium")
     claude.stream.return_value = FakeStreamManager(final_message([text_block("ok")]))
 
     summarize_news(NEWS)
 
     request = claude.stream.call_args.kwargs
     assert request["model"] == "claude-sonnet-5-5"
-    assert request["output_config"] == {"effort": "high"}
+    assert request["output_config"] == {"effort": "medium"}
 
 
 def test_should_fall_back_to_defaults_when_model_and_effort_are_blank(claude, monkeypatch):
@@ -65,7 +65,7 @@ def test_should_fall_back_to_defaults_when_model_and_effort_are_blank(claude, mo
 
     request = claude.stream.call_args.kwargs
     assert request["model"] == "claude-opus-5-5"
-    assert request["output_config"] == {"effort": "max"}
+    assert request["output_config"] == {"effort": "high"}
 
 
 def test_should_create_client_with_env_key_long_read_timeout_and_retries(claude):

@@ -11,13 +11,14 @@ from anthropic.types.beta import BetaMessage
 logger = logging.getLogger(__name__)
 
 DEFAULT_MODEL = "claude-opus-5-5"
-DEFAULT_EFFORT = "max"
+# 默认 high：max 档用真实新闻量实测一期输出了 12.1 万 token，贴着 12.8 万的上限，新闻再多就会被截断
+DEFAULT_EFFORT = "high"
 ALLOWED_EFFORTS = ("low", "medium", "high", "xhigh", "max")
-# 思考也算在 max_tokens 里，max 档思考量很大，所以直接给到模型的输出上限
+# 思考也算在 max_tokens 里，所以直接给到模型的输出上限
 MAX_OUTPUT_TOKENS = 128000
 SERVER_SIDE_FALLBACK_BETA = "server-side-fallback-2026-07-01"
 # 流式请求下这是相邻两段数据之间的读超时，不是整次请求的时长上限；
-# max 档一次摘要可能要 5 到 15 分钟
+# 一次摘要要跑好几分钟（max 档实测 18 分钟）
 READ_TIMEOUT_SECONDS = 600
 CONNECT_TIMEOUT_SECONDS = 10
 MAX_RETRIES = 2
