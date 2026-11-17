@@ -7,7 +7,7 @@
 北京时间 **07:00 / 23:00** 各跑一次，每次只覆盖上次成功发送之后的新闻（双窗口，不重叠、省一半 token）。
 
 ## 当前状态
-- **2026-11-16 起 LLM 改走 Claude API**：官方 `anthropic` SDK 2.3.0，模型 `claude-opus-5-5`，思考强度 **`high`**。**部署 SHA：待回填**（compose 里有 Claude key，文件权限 600 root）。切换前线上是 `88071f4`（DeepSeek 官网直连 `deepseek-flash`），回滚办法见「约定与坑」。
+- **2026-11-16 起 LLM 改走 Claude API**：官方 `anthropic` SDK 2.3.0，模型 `claude-opus-5-5`，思考强度 **`high`**。**部署 SHA：`2b049b3`**（2026-11-16 部署；同一天先上过 `de89240`，那一版代码默认 max。compose 里有 Claude key，文件权限 600 root）。切换前线上是 `88071f4`（DeepSeek 官网直连 `deepseek-flash`），回滚办法见「约定与坑」。
 - **为什么是 high 不是 max**：用户最初指定 max，按 max 上线后用真实新闻量各实测了一期（容器内执行，不发邮件）。max：18 分钟，输入 6.4 万、输出 12.1 万 token，输出贴着 12.8 万的模型上限（新闻再多一点就会被截断，或者只剩思考没有正文），2.68 美元。high：4.4 分钟，输入 7.0 万、输出 2.6 万 token，0.80 美元，摘要 1.9 万字、结构完整。用户当天改定 high，一天两期约 1.6 美元。
 - 配置走 compose env：`ANTHROPIC_API_KEY`（必填）、`CLAUDE_MODEL`（默认 `claude-opus-5-5`）、`CLAUDE_EFFORT`（默认 `high`，可选 low / medium / high / xhigh / max）。`OPENROUTER_*` 全部废弃。07:00 / 23:00 的邮件会比以前晚到四五分钟。
 - 2026-07-30 新增 **AI 前沿板块**（`ai_dev` 分类）：11 个 AI 工程博客/社区源（Simon Willison、HF Blog、Latent Space、Interconnects、Ahead of AI、DeepMind、OpenAI News、HF Daily Papers、r/LocalLLaMA、Lobsters AI、量子位）+ HN 讨论帖按标题 AI 关键词自动路由（`is_ai_related`，HN_TOP_N 30→50）；邮件新增"🤖 AI 前沿（开发者视角）"章节。
